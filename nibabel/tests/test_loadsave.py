@@ -162,3 +162,10 @@ def test_read_img_data_nifti():
                 assert_array_equal(exp_offset, read_img_data(img_back))
             # Delete stuff that might hold onto file references
             del img, img_back, data_back
+
+
+def test_read_img_compression_check():
+    filename = pjoin(dirname(__file__), 'data', 'test_fake_compressed.nii.gz')
+    with pytest.raises(ImageFileError) as err:
+        load(filename)
+    assert str(err.value).startswith('Wrong compression:')

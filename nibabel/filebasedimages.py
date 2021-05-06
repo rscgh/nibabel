@@ -8,6 +8,7 @@
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ##
 """ Common interface for any image format--volume or surface, binary or xml."""
 
+import warnings
 import io
 from copy import deepcopy
 from .fileholders import FileHolder
@@ -468,10 +469,36 @@ class FileBasedImage(object):
         """
         froot, ext, trailing = splitext_addext(filename,
                                                klass._compressed_suffixes)
+
         if ext.lower() not in klass.valid_exts:
             return False, sniff
         if not hasattr(klass.header_class, 'may_contain_header'):
             return True, sniff
+
+        # specific bytes at the beginning of a file identify archive types
+        # not sure where it would be best to define this dict
+        compressed_suffix_to_magic_num_dict = {
+            ".gz": b"\x1f\x8b\x08",
+            ".bz2": b"\x42\x5a\x68",
+            ".zip": b"\x50\x4b\x03\x04"
+        }
+        max_len = 4 #max(len(x) for x in compressed_suffix_to_magic_num_dict.values())
+
+        # in case a compression suffix is given, check if the magic number
+        # identifying the file as compressed archive is present
+        if trailing != "":
+            if trailing in compressed_suffix_to_magic_num_dict.keys():
+                magic_num = compressed_suffix_to_magic_num_dict[trailing]
+                with open(filename, 'rb') as f:
+                    if not f.read(max_len).startswith(magic_num):
+                        raise ImageFileError(f'Wrong compression: According \
+                            to its extension the file "{filename}" should be a compressed archive of type \
+                            "{trailing}", but it does not seem to be one.')
+                
+            else:
+                warnings.warn(f'Could not check if {filename} is a valid archive of type "{trailing}", \
+                    as the corresponding magic number is not known to nibabel.');
+
 
         # Force re-sniff on too-short sniff
         if sniff is not None and len(sniff[0]) < klass._meta_sniff_len:
